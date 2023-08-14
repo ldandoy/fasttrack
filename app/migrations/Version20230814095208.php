@@ -10,7 +10,7 @@ use Doctrine\Migrations\AbstractMigration;
 /**
  * Auto-generated Migration: Please modify to your needs!
  */
-final class Version20230814073906 extends AbstractMigration
+final class Version20230814095208 extends AbstractMigration
 {
     public function getDescription(): string
     {
@@ -20,15 +20,13 @@ final class Version20230814073906 extends AbstractMigration
     public function up(Schema $schema): void
     {
         // this up() migration is auto-generated, please modify it to your needs
-        $this->addSql('ALTER TABLE conference ADD slug VARCHAR(255)');
-        $this->addSql("UPDATE conference SET slug=CONCAT(LOWER(city), '-', year)");
-        // $this->addSql('ALTER TABLE conference ALTER COLUMN slug SET NOT NULL');
-        // $this->addSql('CREATE UNIQUE INDEX UNIQ_911533C8989D9B62 ON conference (slug)');
+        $this->addSql('CREATE TABLE `admin` (id INT AUTO_INCREMENT NOT NULL, username VARCHAR(180) NOT NULL, roles JSON NOT NULL, password VARCHAR(255) NOT NULL, UNIQUE INDEX UNIQ_880E0D76F85E0677 (username), PRIMARY KEY(id)) DEFAULT CHARACTER SET utf8mb4 COLLATE `utf8mb4_unicode_ci` ENGINE = InnoDB');
     }
 
     public function down(Schema $schema): void
     {
         // this down() migration is auto-generated, please modify it to your needs
-        $this->addSql('ALTER TABLE conference DROP slug');
+        $this->addSql('DROP TABLE `admin`');
+        $this->addSql('DROP INDEX UNIQ_911533C8989D9B62 ON conference');
     }
 }

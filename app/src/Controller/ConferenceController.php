@@ -9,9 +9,18 @@ use Symfony\Component\Routing\Annotation\Route;
 use App\Repository\ConferenceRepository;
 use App\Entity\Conference;
 use App\Repository\CommentRepository;
+use App\Entity\Comment;
+use App\Form\CommentType;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use App\SpamChecker;
 
 class ConferenceController extends AbstractController
 {
+    public function __construct(
+        private EntityManagerInterface $entityManager,
+    ) {}
+
     #[Route('/', name: 'homepage')]
     public function index(ConferenceRepository $conferenceRepository): Response
     {
@@ -21,17 +30,51 @@ class ConferenceController extends AbstractController
     }
 
     #[Route('/conference/{slug}', name: 'conference')]
-    public function show(Request $request, Conference $conference, CommentRepository $commentRepository, ConferenceRepository $conferenceRepository): Response
-    {
+    public function show(
+        Request $request,
+        Conference $conference,
+        CommentRepository $commentRepository,
+        SpamChecker $spamChecker,
+        #[Autowire('%photo_dir%')] string $photoDir,
+    ): Response {
+        $comment = new Comment();
+        $form = $this->createForm(CommentType::class, $comment);
         $offset = max(0, $request->query->getInt('offset', 0));
         $paginator = $commentRepository->getCommentPaginator($conference, $offset);
 
+        $form->handleRequest($request);
+        if ($form->isSubmitted() && $form->isValid()) {
+            $comment->setConference($conference);
+
+            if ($photo = $form['photo']->getData()) {
+                $filename = bin2hex(random_bytes(6)).'.'.$photo->guessExtension();
+                $photo->move($photoDir, $filename);
+                $comment->setPhotoFilename($filename);
+            }
+
+            $this->entityManager->persist($comment);
+
+            $context = [
+                'user_ip' => $request->getClientIp(),
+                'user_agent' => $request->headers->get('user-agent'),
+                'referrer' => $request->headers->get('referer'),
+                'permalink' => $request->getUri(),
+            ];
+            if (2 === $spamChecker->getSpamScore($comment, $context)) {
+                throw new \RuntimeException('Blatant spam, go away!');
+            }
+
+            $this->entityManager->flush();
+
+            return $this->redirectToRoute('conference', ['slug' => $conference->getSlug()]);
+        }
+
         return $this->render('conference/show.html.twig', [
-            'conferences' => $conferenceRepository->findAll(),
             'conference' => $conference,
             'comments' => $paginator,
             'previous' => $offset - CommentRepository::PAGINATOR_PER_PAGE,
             'next' => min(count($paginator), $offset + CommentRepository::PAGINATOR_PER_PAGE),
+            'comment_form' => $form,
         ]);
     }
 }
